@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kubernetes Scale-Up: 2 → 4 Replicas — Interactive Explainer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-page:       #f8f7f4;
+    --bg-primary:    #ffffff;
+    --bg-secondary:  #f1efe8;
+    --bg-tertiary:   #e8e6de;
+    --text-primary:  #1a1a18;
+    --text-secondary:#5f5e5a;
+    --text-tertiary: #888780;
+    --border-light:  rgba(0,0,0,0.10);
+    --border-mid:    rgba(0,0,0,0.18);
+    --accent-blue:   #185fa5;
+    --bg-blue:       #e6f1fb;
+    --text-blue:     #0c447c;
+    --border-blue:   #85b7eb;
+    --accent-green:  #3b6d11;
+    --bg-green:      #eaf3de;
+    --text-green:    #27500a;
+    --border-green:  #97c459;
+    --accent-purple: #534ab7;
+    --bg-purple:     #eeedfe;
+    --text-purple:   #3c3489;
+    --border-purple: #afa9ec;
+    --accent-amber:  #ba7517;
+    --bg-amber:      #faeeda;
+    --text-amber:    #633806;
+    --radius-md:     8px;
+    --radius-lg:     12px;
+    --font-sans:     -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --font-mono:     'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-page:       #1a1a18;
+      --bg-primary:    #242422;
+      --bg-secondary:  #2c2c2a;
+      --bg-tertiary:   #353533;
+      --text-primary:  #e8e6de;
+      --text-secondary:#b4b2a9;
+      --text-tertiary: #888780;
+      --border-light:  rgba(255,255,255,0.08);
+      --border-mid:    rgba(255,255,255,0.15);
+      --accent-blue:   #378add;
+      --bg-blue:       #0c2540;
+      --text-blue:     #85b7eb;
+      --border-blue:   #185fa5;
+      --accent-green:  #639922;
+      --bg-green:      #172804;
+      --text-green:    #97c459;
+      --border-green:  #3b6d11;
+      --accent-purple: #7f77dd;
+      --bg-purple:     #1c1840;
+      --text-purple:   #afa9ec;
+      --border-purple: #534ab7;
+      --accent-amber:  #ef9f27;
+      --bg-amber:      #241200;
+      --text-amber:    #fac775;
+    }
+  }
+
+  /* ── Mobile First Typography & Layout ── */
+  html { font-size: 14px; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 1rem 0.5rem;
+    line-height: 1.6;
+  }
+
+  .page { max-width: 960px; margin: 0 auto; }
+
+  /* ── Header ── */
+  .header { margin-bottom: 1.5rem; padding: 0 0.5rem; }
+  .header h1 { font-size: 20px; font-weight: 600; color: var(--text-primary); line-height: 1.3; }
+  .header p  { font-size: 14px; color: var(--text-secondary); margin-top: 4px; }
+  .badges    { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .badge {
+    font-size: 11px; font-weight: 500; padding: 4px 10px;
+    border-radius: 20px; border-width: 0.5px; border-style: solid;
+  }
+  .b-cp     { background: var(--bg-blue);   color: var(--text-blue);   border-color: var(--border-blue); }
+  .b-wk     { background: var(--bg-green);  color: var(--text-green);  border-color: var(--border-green); }
+  .b-st     { background: var(--bg-purple); color: var(--text-purple); border-color: var(--border-purple); }
+  .b-nm     { background: var(--bg-amber);  color: var(--text-amber);  border-color: var(--border-mid); }
+  .b-inline { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 20px; border-width: 0.5px; border-style: solid; vertical-align: middle; }
+
+  /* ── Step pills ── */
+  .step-nav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.25rem; padding: 0 0.5rem; }
+  .step-pill {
+    font-size: 13px; padding: 6px 14px; border-radius: 20px;
+    border: 0.5px solid var(--border-mid);
+    background: transparent; color: var(--text-secondary);
+    cursor: pointer; transition: all .2s; font-family: var(--font-sans);
+    touch-action: manipulation;
+  }
+  .step-pill.active {
+    background: var(--bg-blue); color: var(--text-blue);
+    border-color: var(--border-blue); font-weight: 500;
+  }
+  .step-pill:hover:not(.active) { background: var(--bg-secondary); }
+
+  /* ── Main Layout (Mobile First: Stacked) ── */
+  .main { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; }
+
+  /* ── Diagram card (Now Sticky!) ── */
+  .diagram-card {
+    background: var(--bg-primary);
+    border: 0.5px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 0.5rem;
+    min-height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    /* UX Fix: Keep diagram on screen while scrolling */
+    position: sticky;
+    top: 0.5rem; 
+    z-index: 50;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    .diagram-card { box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+  }
+  
+  .diagram-card svg { width: 100%; max-width: 400px; display: block; height: auto; }
+
+  /* ── Detail card ── */
+  .detail-card {
+    background: var(--bg-primary);
+    border: 0.5px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+  .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-tertiary); }
+  .step-title    { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-top: 2px; }
+  .step-who      { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+  .step-desc {
+    font-size: 14px; color: var(--text-secondary); line-height: 1.6;
+    background: var(--bg-secondary); border-radius: var(--radius-md); padding: .85rem;
+  }
+  .cmd-block {
+    background: var(--bg-tertiary);
+    border: 0.5px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: .85rem;
+    font-family: var(--font-mono);
+    font-size: 12px; color: var(--accent-green);
+    line-height: 1.6; white-space: pre-wrap; overflow-x: auto;
+  }
+  .fact-box {
+    background: var(--bg-secondary);
+    border-left: 3px solid var(--accent-blue);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: .75rem;
+    font-size: 13px; color: var(--text-secondary); line-height: 1.5;
+  }
+  .fact-box strong { color: var(--text-primary); font-weight: 500; }
+
+  /* ── Progress dots & nav ── */
+  .progress-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .prog-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 0.5px solid var(--border-mid);
+    background: transparent; cursor: pointer; transition: background .2s;
+    touch-action: manipulation;
+  }
+  .prog-dot.done   { background: var(--accent-green); border-color: var(--accent-green); }
+  .prog-dot.active { background: var(--accent-blue);  border-color: var(--accent-blue); }
+
+  .nav-btns { display: flex; gap: 10px; }
+  .nav-btn {
+    flex: 1; padding: 10px 0;
+    border-radius: var(--radius-md);
+    border: 0.5px solid var(--border-mid);
+    background: transparent; color: var(--text-primary);
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    transition: background .15s; font-family: var(--font-sans);
+    touch-action: manipulation;
+  }
+  .nav-btn:hover:not(:disabled) { background: var(--bg-secondary); }
+  .nav-btn:disabled { opacity: .3; cursor: default; }
+
+  /* ── Reference table ── */
+  .ref-section { margin-top: 1rem; padding: 0 0.5rem; }
+  .ref-section h2 { font-size: 16px; font-weight: 600; color: var(--text-secondary); margin-bottom: .75rem; }
+  
+  .table-responsive {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 0.5px solid var(--border-light);
+    border-radius: var(--radius-md);
+  }
+  
+  .ref-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
+  .ref-table th {
+    text-align: left; color: var(--text-secondary); font-weight: 600;
+    padding: 10px; border-bottom: 0.5px solid var(--border-light);
+    background: var(--bg-secondary); white-space: nowrap;
+  }
+  .ref-table td { padding: 10px; border-bottom: 0.5px solid var(--border-light); color: var(--text-primary); line-height: 1.5; }
+  .ref-table tr:last-child td { border-bottom: none; }
+  .ref-table code {
+    font-family: var(--font-mono); font-size: 11.5px;
+    background: var(--bg-secondary); padding: 2px 6px;
+    border-radius: 4px; color: var(--accent-green);
+    white-space: nowrap;
+  }
+  .ref-table strong { font-weight: 500; color: var(--accent-blue); }
+
+  /* ── Interview box ── */
+  .interview-box {
+    background: var(--bg-amber);
+    border: 0.5px solid var(--border-purple);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    margin: 1.5rem 0.5rem 0;
+  }
+  .interview-box h3 { font-size: 15px; font-weight: 600; color: var(--text-amber); margin-bottom: .5rem; }
+  .interview-box p  { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+  .interview-box strong { color: var(--text-primary); font-weight: 500; }
+
+  /* ── Footer ── */
+  .footer { margin-top: 2.5rem; font-size: 13px; color: var(--text-tertiary); text-align: center; padding-bottom: 1rem; }
+
+  /* ── Desktop Breakpoint ── */
+  @media (min-width: 768px) {
+    html { font-size: 16px; }
+    body { padding: 2rem 1rem; }
+    .header { padding: 0; }
+    .header h1 { font-size: 24px; }
+    .step-nav { padding: 0; margin-bottom: 1.5rem; }
+    
+    .main { 
+      display: grid; 
+      grid-template-columns: 1fr 1fr; 
+      gap: 1.5rem; 
+    }
+    
+    .diagram-card { 
+      padding: 1rem; 
+      min-height: 320px; 
+      top: 2rem; /* Desktop sticky position */
+      align-self: start; /* Critical for grid stickiness */
+      box-shadow: none; /* Rely on layout instead of shadow on large screens */
+    }
+    .diagram-card svg { max-width: 100%; }
+    
+    .detail-card { padding: 1.5rem; gap: 1.25rem; }
+    .nav-btn { padding: 8px 0; font-size: 13px; }
+    
+    .ref-section { margin-top: .5rem; padding: 0; }
+    .table-responsive { border: none; overflow-x: visible; }
+    .ref-table { min-width: auto; }
+    .ref-table th, .ref-table td { padding: 8px 12px; }
+    
+    .interview-box { margin: 1.5rem 0 0; padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <h1>Kubernetes internal workflow</h1>
+    <p>Scaling a Deployment from 2 → 4 replicas — step by step</p>
+    <div class="badges">
+      <span class="badge b-cp">Masternode (Control plane)</span>
+      <span class="badge b-wk">Workernode</span>
+      <span class="badge b-st">etcd storage</span>
+      <span class="badge b-nm">Namespace</span>
+    </div>
+  </div>
+
+  <div class="step-nav" id="pills"></div>
+
+  <div class="main">
+
+    <div class="diagram-card">
+      <svg viewBox="0 0 320 320" role="img" id="diagram" aria-label="Kubernetes component diagram highlighting Masternode, Workernode, and Namespace">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </marker>
+        </defs>
+
+        <g id="n-dev">
+          <rect x="95" y="5" width="130" height="38" rx="8" stroke-width="0.5"/>
+          <text x="160" y="19" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">Developer</text>
+          <text x="160" y="34" text-anchor="middle" dominant-baseline="central" font-size="10">kubectl apply -n default</text>
+        </g>
+
+        <line x1="160" y1="43" x2="160" y2="68" stroke-width="1" marker-end="url(#arr)" fill="none" id="a0"/>
+
+        <rect x="2" y="52" width="316" height="194" rx="8" stroke="var(--border-mid)" stroke-width="1" stroke-dasharray="4" fill="none" />
+        <text x="8" y="64" font-size="9" font-weight="bold" fill="var(--text-tertiary)">MASTERNODE (CONTROL PLANE)</text>
+
+        <g id="n-api">
+          <rect x="75" y="68" width="170" height="40" rx="8" stroke-width="0.5"/>
+          <text x="160" y="82" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">kube-apiserver</text>
+          <text x="160" y="98" text-anchor="middle" dominant-baseline="central" font-size="10">Authn → Authz → Admission</text>
+        </g>
+
+        <line x1="115" y1="108" x2="58" y2="140" stroke-width="1" marker-end="url(#arr)" fill="none" id="a1"/>
+        <line x1="205" y1="108" x2="258" y2="140" stroke-width="1" marker-end="url(#arr)" fill="none" id="a2"/>
+
+        <g id="n-etcd">
+          <rect x="8" y="140" width="100" height="40" rx="8" stroke-width="0.5"/>
+          <text x="58" y="154" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">etcd</text>
+          <text x="58" y="170" text-anchor="middle" dominant-baseline="central" font-size="10">desired state</text>
+        </g>
+
+        <g id="n-ctrl">
+          <rect x="210" y="140" width="104" height="40" rx="8" stroke-width="0.5"/>
+          <text x="262" y="154" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">controller-mgr</text>
+          <text x="262" y="170" text-anchor="middle" dominant-baseline="central" font-size="10">reconcile loop</text>
+        </g>
+
+        <line x1="262" y1="180" x2="262" y2="200" stroke-width="1" marker-end="url(#arr)" fill="none" id="a3"/>
+
+        <g id="n-sched">
+          <rect x="210" y="200" width="104" height="40" rx="8" stroke-width="0.5"/>
+          <text x="262" y="214" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">kube-scheduler</text>
+          <text x="262" y="230" text-anchor="middle" dominant-baseline="central" font-size="10">assigns workernode</text>
+        </g>
+
+        <line x1="210" y1="222" x2="175" y2="268" stroke-width="1" marker-end="url(#arr)" fill="none" id="a4"/>
+
+        <rect x="2" y="254" width="316" height="64" rx="8" stroke="var(--border-mid)" stroke-width="1" stroke-dasharray="4" fill="none" />
+        <text x="8" y="266" font-size="9" font-weight="bold" fill="var(--text-tertiary)">WORKERNODE</text>
+
+        <g id="n-kubelet">
+          <rect x="58" y="268" width="110" height="40" rx="8" stroke-width="0.5"/>
+          <text x="113" y="282" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">kubelet</text>
+          <text x="113" y="298" text-anchor="middle" dominant-baseline="central" font-size="10">node agent</text>
+        </g>
+
+        <line x1="170" y1="288" x2="185" y2="288" stroke-width="1" marker-end="url(#arr)" fill="none" id="a5"/>
+
+        <g id="n-pod">
+          <rect x="187" y="268" width="125" height="40" rx="4" stroke-width="0.5"/>
+          <text x="249" y="282" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="500">Pod (ns: default)</text>
+          <text x="249" y="298" text-anchor="middle" dominant-baseline="central" font-size="9">containerd → CNI ✅</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="detail-card">
+      
+      <div>
+        <div class="section-label">Step <span id="step-num">1</span> of 13</div>
+        <div class="step-title" id="s-title">Developer updates replicas</div>
+        <div class="step-who"  id="s-who">Actor: You</div>
+      </div>
+      
+      <div>
+        <div class="progress-row" id="dots"></div>
+        <div class="nav-btns">
+          <button class="nav-btn" id="btn-prev" onclick="go(-1)">← Prev</button>
+          <button class="nav-btn" id="btn-next" onclick="go(1)">Next →</button>
+        </div>
+      </div>
+
+      <div class="step-desc" id="s-desc">Loading…</div>
+      <div class="cmd-block"  id="s-cmd"></div>
+      <div class="fact-box"   id="s-fact"></div>
+
+    </div>
+
+  </div><div class="ref-section">
+    <h2>Component reference</h2>
+    <div class="table-responsive">
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Component / Concept</th>
+            <th>Type</th>
+            <th>Role in this flow</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>kube-apiserver</td><td><span class="badge b-cp b-inline">Masternode</span></td><td>Single entry point — validates, authn/authz, writes to etcd</td></tr>
+          <tr><td>etcd</td><td><span class="badge b-st b-inline">Storage</span></td><td>Key-value store — source of truth for all desired state</td></tr>
+          <tr><td>Deployment Controller</td><td><span class="badge b-cp b-inline">Masternode</span></td><td>Watches Deployments, updates the ReplicaSet spec</td></tr>
+          <tr><td>ReplicaSet Controller</td><td><span class="badge b-cp b-inline">Masternode</span></td><td><strong>Creates the new Pod objects</strong> (not the scheduler!)</td></tr>
+          <tr><td>kube-scheduler</td><td><span class="badge b-cp b-inline">Masternode</span></td><td>Assigns Pods to specific workernodes via <code>spec.nodeName</code></td></tr>
+          <tr><td>kubelet</td><td><span class="badge b-wk b-inline">Workernode</span></td><td>Watches for Pods assigned to its node, starts containers</td></tr>
+          <tr><td>containerd</td><td><span class="badge b-wk b-inline">Workernode</span></td><td>Container runtime — pulls image, creates container process</td></tr>
+          <tr><td>CNI plugin</td><td><span class="badge b-wk b-inline">Workernode</span></td><td>Allocates pod IP and sets up networking (Calico, Cilium…)</td></tr>
+          <tr><td>Namespace</td><td><span class="badge b-nm b-inline">Logical</span></td><td>Provides a virtual cluster boundary (e.g., <code>default</code>).</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="interview-box">
+    <h3>⭐ Classic interview question</h3>
+    <p><em>"When replicas change from 2 to 4, who actually creates the new pods?"</em><br><br>
+    <strong>Answer: The ReplicaSet Controller inside kube-controller-manager on the Masternode.</strong><br><br>
+    It runs a reconcile loop: desired = 4, actual = 2 → create 2 pod objects. The scheduler does NOT create pods. The API server does NOT create pods. The kubelet on the workernode does NOT create pods. Only the ReplicaSet Controller creates the pod API objects.
+    </p>
+  </div>
+
+  <div class="footer">k8s-scale-up interactive explainer · built for SRECloudOps.in</div>
+
+</div><script>
+const STEPS = [
+  {
+    title: "Developer updates replicas",
+    who: "Actor: You (kubectl)",
+    node: "n-dev",
+    cmd: `# Edit deployment YAML and apply:
+kubectl edit deployment my-app -n default
+# or one-liner:
+kubectl scale deployment my-app --replicas=4 -n default`,
+    desc: "You edit the Deployment YAML changing replicas: 2 to replicas: 4 and run kubectl apply. This sends a PATCH request to kube-apiserver on the masternode. Nothing in the cluster has changed yet — you have only declared your desired state in a specific namespace.",
+    fact: "Nothing has changed in the cluster yet — you've only stated your <strong>desired state</strong>."
+  },
+  {
+    title: "kubectl → kube-apiserver",
+    who: "Actor: kubectl CLI",
+    node: "n-api",
+    cmd: `PATCH /apis/apps/v1/namespaces/default/deployments/my-app
+Content-Type: application/merge-patch+json
+
+{"spec":{"replicas":4}}`,
+    desc: "kubectl serializes your change into a PATCH request and sends it over HTTPS to kube-apiserver on the masternode. Notice the URL includes 'namespaces/default', indicating the logical namespace this deployment belongs to.",
+    fact: "Every change to the cluster goes through <strong>kube-apiserver</strong> on the control plane (masternode)."
+  },
+  {
+    title: "Authn → Authz → Admission",
+    who: "Actor: kube-apiserver (validation pipeline)",
+    node: "n-api",
+    cmd: `# Three gates inside kube-apiserver:
+1. Authentication  — Who are you?      (cert / token / OIDC)
+2. Authorization   — Can you do this?  (RBAC: verb=patch, resource=deployments)
+3. Admission       — Is this valid?    (MutatingWebhook, ValidatingWebhook, quota)`,
+    desc: "The API server runs three sequential gates before writing anything. Authentication verifies your identity, RBAC checks your permissions, and Admission Controllers can mutate or reject the request (e.g. inject a sidecar, enforce resource limits).",
+    fact: "If any gate fails you get a <strong>401, 403, or 422</strong> error — the desired state is never written to etcd."
+  },
+  {
+    title: "Desired state written to etcd",
+    who: "Actor: kube-apiserver → etcd",
+    node: "n-etcd",
+    cmd: `# etcd key-value entries after the write:
+/registry/deployments/default/my-app
+  → spec.replicas: 4   ✅ updated
+
+/registry/replicasets/default/my-app-7d4f9
+  → spec.replicas: 2   ← still 2, mismatch triggers controllers`,
+    desc: "The API server writes the updated Deployment spec (replicas: 4) into etcd, the masternode's key-value store that is the single source of truth. The ReplicaSet in the 'default' namespace still reads 2 replicas — this mismatch starts the reconciliation chain.",
+    fact: "etcd uses the <strong>Raft consensus protocol</strong>. A write is acknowledged only once a quorum of etcd nodes agree — your desired state is durable."
+  },
+  {
+    title: "Deployment Controller notices mismatch",
+    who: "Actor: kube-controller-manager (Deployment Controller)",
+    node: "n-ctrl",
+    cmd: `# Deployment Controller watch loop (pseudo-code):
+for event in watch("/registry/deployments/"):
+    desired  = event.spec.replicas          # 4
+    rs_spec  = get_replicaset().spec.replicas  # 2
+    if desired != rs_spec:
+        api.patch(replicaset, replicas=desired)`,
+    desc: "The Deployment Controller running on the masternode is watching etcd for Deployment changes. It computes: desired=4, ReplicaSet=2, so it calls the API server to update the ReplicaSet's replicas field to 4.",
+    fact: "kube-controller-manager runs <strong>many controllers in one binary</strong>: Deployment, ReplicaSet, Node, Job, ServiceAccount, and more — all running reconcile loops concurrently."
+  },
+  {
+    title: "ReplicaSet Controller creates Pod objects",
+    who: "Actor: kube-controller-manager (ReplicaSet Controller)",
+    node: "n-ctrl",
+    cmd: `# ReplicaSet Controller sees: want 4 pods, running 2.
+# It POSTs two new Pod objects to the API server:
+
+POST /api/v1/namespaces/default/pods
+{"metadata":{"name":"my-app-abc12",
+  "ownerReferences":[{"name":"my-app-7d4f9"}]},
+ "spec":{...template...}}`,
+    desc: "The ReplicaSet Controller on the masternode counts actual Running pods (2) vs desired (4). It creates two new Pod API objects within the default namespace. These pods have no workernode assigned yet — they enter Pending state.",
+    fact: "⭐ <strong>Interview answer: the ReplicaSet Controller creates pods</strong> — not the scheduler, not the API server, not kubelet."
+  },
+  {
+    title: "Pods land in etcd as Pending",
+    who: "Actor: etcd",
+    node: "n-etcd",
+    cmd: `# New pod objects in etcd — nodeName is empty:
+/registry/pods/default/my-app-abc12
+  → status.phase: "Pending"
+  → spec.nodeName: ""   ← scheduler will fill this in
+
+# Visible in kubectl:
+kubectl get pods -n default
+NAME           READY   STATUS    RESTARTS
+my-app-abc12   0/1     Pending   0
+my-app-def34   0/1     Pending   0`,
+    desc: "The two new Pod objects are persisted in etcd with an empty nodeName. They sit in Pending phase inside their designated namespace — visible via kubectl but not running on any workernode yet. The scheduler will pick them up next.",
+    fact: "Run <code>kubectl get pods -n default</code> and look for <strong>0/1 READY</strong> and <strong>Pending</strong> STATUS to see pods at this stage."
+  },
+  {
+    title: "Scheduler picks a workernode",
+    who: "Actor: kube-scheduler",
+    node: "n-sched",
+    cmd: `# Scheduler watch loop (pseudo-code):
+for pod in watch(pods, filter=nodeName==""):
+
+    # 1. Filter phase — eliminates impossible nodes:
+    nodes = filter(nodes, pod)   # taints, affinity, resources
+
+    # 2. Score phase — ranks remaining nodes:
+    node  = score(nodes, pod)    # least-requested, spread
+
+    # 3. Bind — writes nodeName to pod spec:
+    api.bind(pod, node.name)`,
+    desc: "The scheduler on the masternode watches for Pending pods with no nodeName. It runs a filter phase (which workernodes can run this pod?) and a scoring phase (which workernode is best?), then writes the winning node name into spec.nodeName via the API server.",
+    fact: "The scheduler <strong>does NOT start containers</strong>. It only assigns a pod to a workernode by writing one field: <code>spec.nodeName</code>."
+  },
+  {
+    title: "kubelet sees pods assigned to its node",
+    who: "Actor: kubelet (on the selected workernode)",
+    node: "n-kubelet",
+    cmd: `# kubelet watch loop (pseudo-code):
+for pod in watch(pods, filter=spec.nodeName==thisWorkernode):
+    if pod.uid not in knownPods:
+        startPod(pod)   # → calls containerd via CRI`,
+    desc: "Each kubelet watches the masternode's API for pods assigned to its specific workernode. When it detects the new pod with a nodeName matching its own hostname, it begins the container startup sequence.",
+    fact: "Each workernode runs exactly <strong>one kubelet</strong>. It's the only process that actually communicates with the container runtime on that node."
+  },
+  {
+    title: "kubelet → containerd pulls & starts container",
+    who: "Actor: kubelet + containerd (CRI on workernode)",
+    node: "n-kubelet",
+    cmd: `# kubelet calls containerd via CRI (gRPC):
+1. ImageService.PullImage("docker.io/my-app:latest")
+2. RuntimeService.CreateContainer(config)
+   # → Linux namespaces (pid, net, mnt, uts, ipc)
+   # → cgroups (CPU/memory limits from resources.limits)
+   # → mounts (volumes, configmaps, secrets)
+3. RuntimeService.StartContainer(containerID)`,
+    desc: "kubelet on the workernode instructs containerd via the Container Runtime Interface (CRI) to pull the image if not cached, create the container with correct Linux namespaces and cgroup limits, and then start the process.",
+    fact: "containerd is the <strong>default runtime since Kubernetes 1.24</strong> (dockershim was removed). Verify with: <code>kubectl get nodes -o wide</code> and check the CONTAINER-RUNTIME column."
+  },
+  {
+    title: "CNI plugin allocates pod IP",
+    who: "Actor: CNI plugin (Calico / Cilium / Flannel…)",
+    node: "n-kubelet",
+    cmd: `# CNI is invoked by kubelet after container is created:
+1. Assign IP from pod CIDR      (e.g. 10.244.2.5/24)
+2. Create veth pair             (pod netns ↔ node bridge)
+3. Program routes               (so other pods can reach it)
+4. Optionally apply NetworkPolicy (Calico / Cilium)`,
+    desc: "The CNI plugin on the workernode is called by kubelet after the container is created. It assigns a pod IP, creates a virtual ethernet pair linking the pod to the workernode's network, and programs routes.",
+    fact: "Without CNI, pods have no network. CNI is pluggable — <strong>Calico</strong> (NetworkPolicy), <strong>Cilium</strong> (eBPF), <strong>Flannel</strong> (simple overlay) are popular choices."
+  },
+  {
+    title: "Readiness probe passes → Pod = Ready",
+    who: "Actor: kubelet (probe runner)",
+    node: "n-pod",
+    cmd: `# kubelet runs probes defined in the pod spec:
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+# Once probe returns HTTP 200, kubelet sets:
+status.conditions[type=Ready].status = "True"
+# Pod is added to the Service Endpoints → traffic flows in`,
+    desc: "kubelet continuously runs probes on the workernode. Once the readiness probe succeeds, kubelet marks the pod Ready and the Endpoints controller on the masternode adds its IP to the Service's endpoint list — live traffic can now reach the new pod.",
+    fact: "A pod can be <strong>Running</strong> but not <strong>Ready</strong>. Traffic only goes to Ready pods — this is how rolling updates avoid downtime."
+  },
+  {
+    title: "Status reported back — reconcile complete",
+    who: "Actor: kubelet → kube-apiserver → etcd → controllers",
+    node: "n-api",
+    cmd: `# kubelet PATCHes the pod status back:
+PATCH /api/v1/namespaces/default/pods/my-app-abc12/status
+{"status":{"phase":"Running","podIP":"10.244.2.5",
+  "conditions":[{"type":"Ready","status":"True"}]}}
+
+# Deployment controller updates its own status:
+kubectl get deployment my-app -n default
+NAME      READY   UP-TO-DATE   AVAILABLE
+my-app    4/4     4            4         ✅`,
+    desc: "kubelet sends status updates back to the masternode. The Deployment controller sees all 4 replicas in the default namespace are now Ready and updates deployment.status.readyReplicas to 4. The reconcile loop is satisfied.",
+    fact: "The system is <strong>self-healing by design</strong>. Every controller runs this reconcile loop continuously. No human intervention needed to recover from pod crashes."
+  }
+];
+
+const NODE_IDS = [
+  "n-dev","n-api","n-api","n-etcd","n-ctrl","n-ctrl",
+  "n-etcd","n-sched","n-kubelet","n-kubelet","n-kubelet","n-pod","n-api"
+];
+
+let cur = 0;
+const dark = matchMedia("(prefers-color-scheme:dark)").matches;
+
+// Color maps
+const FILL_LIGHT = {
+  "n-dev":"#f1efe8","n-api":"#dbeafe","n-etcd":"#eeedfe",
+  "n-ctrl":"#dbeafe","n-sched":"#dbeafe","n-kubelet":"#dcfce7","n-pod":"#dcfce7"
+};
+const FILL_DARK = {
+  "n-dev":"#2c2c2a","n-api":"#0c2540","n-etcd":"#1c1840",
+  "n-ctrl":"#0c2540","n-sched":"#0c2540","n-kubelet":"#172804","n-pod":"#172804"
+};
+const STROKE_LIGHT = {
+  "n-api":"#3b82f6","n-etcd":"#7f77dd","n-ctrl":"#3b82f6",
+  "n-sched":"#3b82f6","n-kubelet":"#63a320","n-pod":"#63a320","n-dev":"#888780"
+};
+const STROKE_DARK = {
+  "n-api":"#60a5fa","n-etcd":"#afa9ec","n-ctrl":"#60a5fa",
+  "n-sched":"#60a5fa","n-kubelet":"#97c459","n-pod":"#97c459","n-dev":"#5f5e5a"
+};
+const TEXT_LIGHT = {
+  "n-api":"#0c447c","n-etcd":"#3c3489","n-ctrl":"#0c447c",
+  "n-sched":"#0c447c","n-kubelet":"#27500a","n-pod":"#27500a","n-dev":"#444441"
+};
+const TEXT_DARK = {
+  "n-api":"#85b7eb","n-etcd":"#afa9ec","n-ctrl":"#85b7eb",
+  "n-sched":"#85b7eb","n-kubelet":"#97c459","n-pod":"#c0dd97","n-dev":"#b4b2a9"
+};
+
+function buildPills() {
+  const c = document.getElementById("pills");
+  STEPS.forEach((s, i) => {
+    const b = document.createElement("button");
+    b.className = "step-pill" + (i === 0 ? " active" : "");
+    b.textContent = i + 1;
+    b.title = s.title;
+    b.onclick = () => { cur = i; render(); };
+    c.appendChild(b);
+  });
+}
+
+function buildDots() {
+  const c = document.getElementById("dots");
+  STEPS.forEach((_, i) => {
+    const d = document.createElement("div");
+    d.className = "prog-dot";
+    d.onclick = () => { cur = i; render(); };
+    c.appendChild(d);
+  });
+}
+
+function resetNodes() {
+  ["n-dev","n-api","n-etcd","n-ctrl","n-sched","n-kubelet","n-pod"].forEach(id => {
+    const g = document.getElementById(id);
+    if (!g) return;
+    const r = g.querySelector("rect");
+    if (!r) return;
+    r.style.fill   = dark ? "#2c2c2a" : "#f8f7f4";
+    r.style.stroke = dark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.10)";
+    r.style.strokeWidth = "0.5";
+    g.querySelectorAll("text").forEach(t => {
+      t.style.fill = dark ? "#b4b2a9" : "#5f5e5a";
+    });
+  });
+  // reset all arrows
+  document.querySelectorAll("line[id^='a']").forEach(l => {
+    l.style.stroke = dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)";
+  });
+}
+
+function highlightNode(id) {
+  const g = document.getElementById(id);
+  if (!g) return;
+  const r = g.querySelector("rect");
+  if (!r) return;
+  r.style.fill        = dark ? (FILL_DARK[id]   || "#2c2c2a") : (FILL_LIGHT[id]  || "#f8f7f4");
+  r.style.stroke      = dark ? (STROKE_DARK[id] || "#60a5fa") : (STROKE_LIGHT[id]|| "#3b82f6");
+  r.style.strokeWidth = "1.5";
+  const tc = dark ? (TEXT_DARK[id] || "#e8e6de") : (TEXT_LIGHT[id] || "#1a1a18");
+  g.querySelectorAll("text").forEach(t => { t.style.fill = tc; });
+}
+
+function render() {
+  const s = STEPS[cur];
+  document.getElementById("s-title").textContent = s.title;
+  document.getElementById("s-who").textContent   = s.who;
+  document.getElementById("s-desc").textContent  = s.desc;
+  document.getElementById("s-cmd").textContent   = s.cmd;
+  document.getElementById("s-fact").innerHTML    = s.fact;
+  document.getElementById("step-num").textContent = cur + 1;
+  document.querySelectorAll(".step-pill").forEach((p, i) =>
+    p.classList.toggle("active", i === cur)
+  );
+  document.querySelectorAll(".prog-dot").forEach((d, i) => {
+    d.classList.toggle("done",   i < cur);
+    d.classList.toggle("active", i === cur);
+  });
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === STEPS.length - 1;
+  resetNodes();
+  highlightNode(NODE_IDS[cur]);
+}
+
+function go(d) {
+  cur = Math.max(0, Math.min(STEPS.length - 1, cur + d));
+  render();
+}
+
+// keyboard navigation
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight" || e.key === "ArrowDown") go(1);
+  if (e.key === "ArrowLeft"  || e.key === "ArrowUp")  go(-1);
+});
+
+buildPills();
+buildDots();
+render();
+</script>
+</body>
+</html>
