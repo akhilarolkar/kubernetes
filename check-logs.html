@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kubernetes Logs: kubectl logs — Interactive Explainer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-page:       #f8f7f4;
+    --bg-primary:    #ffffff;
+    --bg-secondary:  #f1efe8;
+    --bg-tertiary:   #e8e6de;
+    --text-primary:  #1a1a18;
+    --text-secondary:#5f5e5a;
+    --text-tertiary: #888780;
+    --border-light:  rgba(0,0,0,0.10);
+    --border-mid:    rgba(0,0,0,0.18);
+    --accent-blue:   #185fa5;
+    --bg-blue:       #e6f1fb;
+    --text-blue:     #0c447c;
+    --border-blue:   #85b7eb;
+    --accent-green:  #3b6d11;
+    --bg-green:      #eaf3de;
+    --text-green:    #27500a;
+    --border-green:  #97c459;
+    --accent-purple: #534ab7;
+    --bg-purple:     #eeedfe;
+    --text-purple:   #3c3489;
+    --border-purple: #afa9ec;
+    --accent-amber:  #ba7517;
+    --bg-amber:      #faeeda;
+    --text-amber:    #633806;
+    --accent-red:    #a92a2a;
+    --bg-red:        #fbebeb;
+    --text-red:      #6b1515;
+    --radius-md:     8px;
+    --radius-lg:     12px;
+    --font-sans:     -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --font-mono:     'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-page:       #1a1a18;
+      --bg-primary:    #242422;
+      --bg-secondary:  #2c2c2a;
+      --bg-tertiary:   #353533;
+      --text-primary:  #e8e6de;
+      --text-secondary:#b4b2a9;
+      --text-tertiary: #888780;
+      --border-light:  rgba(255,255,255,0.08);
+      --border-mid:    rgba(255,255,255,0.15);
+      --accent-blue:   #378add;
+      --bg-blue:       #0c2540;
+      --text-blue:     #85b7eb;
+      --border-blue:   #185fa5;
+      --accent-green:  #639922;
+      --bg-green:      #172804;
+      --text-green:    #97c459;
+      --border-green:  #3b6d11;
+      --accent-purple: #7f77dd;
+      --bg-purple:     #1c1840;
+      --text-purple:   #afa9ec;
+      --border-purple: #534ab7;
+      --accent-amber:  #ef9f27;
+      --bg-amber:      #241200;
+      --text-amber:    #fac775;
+      --accent-red:    #e05252;
+      --bg-red:        #301010;
+      --text-red:      #f59b9b;
+    }
+  }
+
+  /* ── Mobile First Typography & Layout ── */
+  html { font-size: 14px; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 1rem 0.5rem;
+    line-height: 1.6;
+  }
+
+  .page { max-width: 960px; margin: 0 auto; }
+
+  /* ── Header ── */
+  .header { margin-bottom: 1.5rem; padding: 0 0.5rem; }
+  .header h1 { font-size: 20px; font-weight: 600; color: var(--text-primary); line-height: 1.3; }
+  .header p  { font-size: 14px; color: var(--text-secondary); margin-top: 4px; }
+  .badges    { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .badge {
+    font-size: 11px; font-weight: 500; padding: 4px 10px;
+    border-radius: 20px; border-width: 0.5px; border-style: solid;
+  }
+  .b-cp     { background: var(--bg-blue);   color: var(--text-blue);   border-color: var(--border-blue); }
+  .b-wk     { background: var(--bg-green);  color: var(--text-green);  border-color: var(--border-green); }
+  .b-st     { background: var(--bg-purple); color: var(--text-purple); border-color: var(--border-purple); }
+  .b-ds     { background: var(--bg-red);    color: var(--text-red);    border-color: var(--accent-red); }
+  .b-inline { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 20px; border-width: 0.5px; border-style: solid; vertical-align: middle; }
+
+  /* ── Step pills ── */
+  .step-nav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.25rem; padding: 0 0.5rem; }
+  .step-pill {
+    font-size: 13px; padding: 6px 14px; border-radius: 20px;
+    border: 0.5px solid var(--border-mid);
+    background: transparent; color: var(--text-secondary);
+    cursor: pointer; transition: all .2s; font-family: var(--font-sans);
+    touch-action: manipulation;
+  }
+  .step-pill.active {
+    background: var(--bg-blue); color: var(--text-blue);
+    border-color: var(--border-blue); font-weight: 500;
+  }
+  .step-pill:hover:not(.active) { background: var(--bg-secondary); }
+
+  /* ── Main Layout ── */
+  .main { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; }
+
+  /* ── Diagram card (Sticky) ── */
+  .diagram-card {
+    background: var(--bg-primary);
+    border: 0.5px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 0.5rem;
+    min-height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: sticky;
+    top: 0.5rem; 
+    z-index: 50;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    .diagram-card { box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+  }
+  .diagram-card svg { width: 100%; max-width: 400px; display: block; height: auto; }
+
+  /* ── Detail card ── */
+  .detail-card {
+    background: var(--bg-primary);
+    border: 0.5px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+  .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-tertiary); }
+  .step-title    { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-top: 2px; }
+  .step-who      { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+  .step-desc {
+    font-size: 14px; color: var(--text-secondary); line-height: 1.6;
+    background: var(--bg-secondary); border-radius: var(--radius-md); padding: .85rem;
+  }
+  .cmd-block {
+    background: var(--bg-tertiary);
+    border: 0.5px solid var(--border-light);
+    border-radius: var(--radius-md);
+    padding: .85rem;
+    font-family: var(--font-mono);
+    font-size: 12px; color: var(--accent-green);
+    line-height: 1.6; white-space: pre-wrap; overflow-x: auto;
+  }
+  .fact-box {
+    background: var(--bg-secondary);
+    border-left: 3px solid var(--accent-blue);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: .75rem;
+    font-size: 13px; color: var(--text-secondary); line-height: 1.5;
+  }
+  .fact-box strong { color: var(--text-primary); font-weight: 500; }
+
+  /* ── Progress dots & nav ── */
+  .progress-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .prog-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    border: 0.5px solid var(--border-mid);
+    background: transparent; cursor: pointer; transition: background .2s;
+    touch-action: manipulation;
+  }
+  .prog-dot.done   { background: var(--accent-green); border-color: var(--accent-green); }
+  .prog-dot.active { background: var(--accent-blue);  border-color: var(--accent-blue); }
+
+  .nav-btns { display: flex; gap: 10px; }
+  .nav-btn {
+    flex: 1; padding: 10px 0;
+    border-radius: var(--radius-md);
+    border: 0.5px solid var(--border-mid);
+    background: transparent; color: var(--text-primary);
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    transition: background .15s; font-family: var(--font-sans);
+    touch-action: manipulation;
+  }
+  .nav-btn:hover:not(:disabled) { background: var(--bg-secondary); }
+  .nav-btn:disabled { opacity: .3; cursor: default; }
+
+  /* ── Reference table ── */
+  .ref-section { margin-top: 1rem; padding: 0 0.5rem; }
+  .ref-section h2 { font-size: 16px; font-weight: 600; color: var(--text-secondary); margin-bottom: .75rem; }
+  .table-responsive {
+    width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    border: 0.5px solid var(--border-light); border-radius: var(--radius-md);
+  }
+  .ref-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
+  .ref-table th {
+    text-align: left; color: var(--text-secondary); font-weight: 600;
+    padding: 10px; border-bottom: 0.5px solid var(--border-light);
+    background: var(--bg-secondary); white-space: nowrap;
+  }
+  .ref-table td { padding: 10px; border-bottom: 0.5px solid var(--border-light); color: var(--text-primary); line-height: 1.5; }
+  .ref-table tr:last-child td { border-bottom: none; }
+  .ref-table code {
+    font-family: var(--font-mono); font-size: 11.5px;
+    background: var(--bg-secondary); padding: 2px 6px;
+    border-radius: 4px; color: var(--accent-green); white-space: nowrap;
+  }
+
+  /* ── Interview box ── */
+  .interview-box {
+    background: var(--bg-amber); border: 0.5px solid var(--border-purple);
+    border-radius: var(--radius-lg); padding: 1rem; margin: 1.5rem 0.5rem 0;
+  }
+  .interview-box h3 { font-size: 15px; font-weight: 600; color: var(--text-amber); margin-bottom: .5rem; }
+  .interview-box p  { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+  .interview-box strong { color: var(--text-primary); font-weight: 500; }
+
+  /* ── Desktop Breakpoint ── */
+  @media (min-width: 768px) {
+    html { font-size: 16px; }
+    body { padding: 2rem 1rem; }
+    .header { padding: 0; }
+    .header h1 { font-size: 24px; }
+    .step-nav { padding: 0; margin-bottom: 1.5rem; }
+    
+    .main { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .diagram-card { 
+      padding: 1rem; min-height: 320px; top: 2rem; 
+      align-self: start; box-shadow: none; 
+    }
+    .detail-card { padding: 1.5rem; gap: 1.25rem; }
+    .nav-btn { padding: 8px 0; font-size: 13px; }
+    
+    .ref-section { margin-top: .5rem; padding: 0; }
+    .table-responsive { border: none; overflow-x: visible; }
+    .ref-table { min-width: auto; }
+    .ref-table th, .ref-table td { padding: 8px 12px; }
+    
+    .interview-box { margin: 1.5rem 0 0; padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <h1>Kubernetes internal workflow</h1>
+    <p>Fetching logs: <code>kubectl logs my-app</code> — step by step</p>
+    <div class="badges">
+      <span class="badge b-cp">Masternode (Proxy)</span>
+      <span class="badge b-wk">Workernode</span>
+      <span class="badge b-ds">Filesystem (Disk)</span>
+    </div>
+  </div>
+
+  <div class="step-nav" id="pills"></div>
+
+  <div class="main">
+
+    <div class="diagram-card">
+      <svg viewBox="0 0 320 320" role="img" id="diagram" aria-label="Kubernetes component diagram for fetching logs">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </marker>
+          <marker id="arr-rev" viewBox="0 0 10 10" refX="2" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M8 1L2 5L8 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </marker>
+        </defs>
+
+        <g id="n-dev">
+          <rect x="95" y="5" width="130" height="38" rx="8" stroke-width="0.5"/>
+          <text x="160" y="19" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">Developer</text>
+          <text x="160" y="34" text-anchor="middle" dominant-baseline="central" font-size="10">kubectl logs</text>
+        </g>
+
+        <line x1="160" y1="43" x2="160" y2="68" stroke-width="1" marker-end="url(#arr)" fill="none" id="a0"/>
+
+        <rect x="2" y="52" width="316" height="110" rx="8" stroke="var(--border-mid)" stroke-width="1" stroke-dasharray="4" fill="none" />
+        <text x="8" y="64" font-size="9" font-weight="bold" fill="var(--text-tertiary)">MASTERNODE</text>
+
+        <g id="n-api">
+          <rect x="75" y="68" width="170" height="40" rx="8" stroke-width="0.5"/>
+          <text x="160" y="82" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">kube-apiserver</text>
+          <text x="160" y="98" text-anchor="middle" dominant-baseline="central" font-size="10">Proxy engine</text>
+        </g>
+
+        <line x1="160" y1="108" x2="160" y2="128" stroke-width="1" marker-end="url(#arr)" marker-start="url(#arr-rev)" fill="none" id="a1"/>
+
+        <g id="n-etcd">
+          <rect x="110" y="128" width="100" height="26" rx="8" stroke-width="0.5"/>
+          <text x="160" y="141" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="500">etcd lookup</text>
+        </g>
+
+        <line x1="75" y1="88" x2="35" y2="88" stroke-width="1" fill="none" id="a2_1"/>
+        <line x1="35" y1="88" x2="35" y2="198" stroke-width="1" fill="none" id="a2_2"/>
+        <line x1="35" y1="198" x2="70" y2="198" stroke-width="1" marker-end="url(#arr)" fill="none" id="a2_3"/>
+
+        <rect x="2" y="172" width="316" height="138" rx="8" stroke="var(--border-mid)" stroke-width="1" stroke-dasharray="4" fill="none" />
+        <text x="8" y="184" font-size="9" font-weight="bold" fill="var(--text-tertiary)">WORKERNODE (where pod lives)</text>
+
+        <g id="n-kubelet">
+          <rect x="70" y="178" width="180" height="40" rx="8" stroke-width="0.5"/>
+          <text x="160" y="192" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">kubelet (port 10250)</text>
+          <text x="160" y="208" text-anchor="middle" dominant-baseline="central" font-size="10">CRI translation</text>
+        </g>
+
+        <line x1="160" y1="218" x2="160" y2="238" stroke-width="1" marker-end="url(#arr)" fill="none" id="a3"/>
+
+        <g id="n-pod">
+          <rect x="100" y="238" width="120" height="26" rx="6" stroke-width="0.5"/>
+          <text x="160" y="251" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="500">container runtime</text>
+        </g>
+
+        <line x1="160" y1="264" x2="160" y2="282" stroke-width="1" marker-end="url(#arr)" fill="none" id="a4"/>
+
+        <g id="n-disk">
+          <rect x="60" y="282" width="200" height="20" rx="4" stroke-width="0.5"/>
+          <text x="160" y="292" text-anchor="middle" dominant-baseline="central" font-size="9" font-weight="500">Node Filesystem: /var/log/pods/...</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="detail-card">
+      <div>
+        <div class="section-label">Step <span id="step-num">1</span> of 7</div>
+        <div class="step-title" id="s-title">Developer requests logs</div>
+        <div class="step-who"  id="s-who">Actor: You</div>
+      </div>
+      
+      <div>
+        <div class="progress-row" id="dots"></div>
+        <div class="nav-btns">
+          <button class="nav-btn" id="btn-prev" onclick="go(-1)">← Prev</button>
+          <button class="nav-btn" id="btn-next" onclick="go(1)">Next →</button>
+        </div>
+      </div>
+
+      <div class="step-desc" id="s-desc">Loading…</div>
+      <div class="cmd-block"  id="s-cmd"></div>
+      <div class="fact-box"   id="s-fact"></div>
+    </div>
+
+  </div><div class="ref-section">
+    <h2>Component reference</h2>
+    <div class="table-responsive">
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Component</th>
+            <th>Type</th>
+            <th>Role in log fetching</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>kube-apiserver</td><td><span class="badge b-cp b-inline">Masternode</span></td><td>Authenticates request, looks up node, and acts as a transparent proxy.</td></tr>
+          <tr><td>etcd</td><td><span class="badge b-st b-inline">Storage</span></td><td>Stores the <code>spec.nodeName</code> so API server knows where the pod lives.</td></tr>
+          <tr><td>kubelet</td><td><span class="badge b-wk b-inline">Workernode</span></td><td>Receives API request, translates it to the container runtime via CRI.</td></tr>
+          <tr><td>containerd (CRI)</td><td><span class="badge b-wk b-inline">Workernode</span></td><td>Reads the actual bytes from the physical log file on the node.</td></tr>
+          <tr><td>Node Filesystem</td><td><span class="badge b-ds b-inline">Disk</span></td><td>Where logs physically exist (<code>/var/log/pods</code>). Ephemeral by default.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="interview-box">
+    <h3>⭐ Classic interview question</h3>
+    <p><em>"Does the Kubernetes API Server store pod logs in etcd?"</em><br><br>
+    <strong>Answer: No! Logs are strictly stored on the Worker Node's physical disk.</strong><br><br>
+    The API Server simply acts as a proxy. It authenticates you, finds out which node has your pod, and forwards your request to that node's kubelet. If the pod dies or the worker node crashes, those logs are permanently deleted unless you have an external log aggregation tool (like Fluentd + ElasticSearch, or Promtail + Loki) scraping them.
+    </p>
+  </div>
+
+  <div class="footer">k8s-logs interactive explainer · built for SRECloudOps.in</div>
+
+</div><script>
+const STEPS = [
+  {
+    title: "Developer runs kubectl logs",
+    who: "Actor: You (kubectl)",
+    node: "n-dev",
+    cmd: `$ kubectl logs my-app-abc12 -n default`,
+    desc: "You run the logs command. Kubectl converts this into an HTTP GET request and targets the API server. Unlike scaling (which edits desired state), this is a synchronous request to retrieve live operational data.",
+    fact: "You can append <code>-f</code> (follow) to keep the HTTP connection open and stream logs in real-time."
+  },
+  {
+    title: "Request hits kube-apiserver",
+    who: "Actor: kube-apiserver",
+    node: "n-api",
+    cmd: `GET /api/v1/namespaces/default/pods/my-app-abc12/log
+Host: api.cluster.local:6443
+Authorization: Bearer <token>`,
+    desc: "The request arrives at the API server. Just like any other request, it passes through Authentication (Are you a valid user?) and Authorization (Does your RBAC role allow 'get pods/log' in the 'default' namespace?).",
+    fact: "The API Server is the <strong>only component</strong> that communicates directly with external clients. You never talk to the worker node directly."
+  },
+  {
+    title: "API Server looks up the Pod's Node",
+    who: "Actor: kube-apiserver → etcd",
+    node: "n-etcd",
+    cmd: `# API server checks etcd for the pod record:
+/registry/pods/default/my-app-abc12
+
+{
+  "spec": {
+    "nodeName": "worker-node-02"  <-- Found it!
+  }
+}`,
+    desc: "The API server doesn't have the logs. It queries etcd to read the Pod object. It specifically looks at the spec.nodeName field to figure out exactly which worker node is currently hosting this container.",
+    fact: "If the pod is in 'Pending' state (no node assigned yet), the API server will immediately return an error."
+  },
+  {
+    title: "API Server proxies to Kubelet",
+    who: "Actor: kube-apiserver → kubelet",
+    node: "n-kubelet",
+    cmd: `# Internal network hop (API -> Worker Node IP)
+GET /containerLogs/default/my-app-abc12/my-app
+Host: <worker-node-02-IP>:10250`,
+    desc: "Now acting as a transparent proxy, the API server opens a new internal HTTP connection directly to the Kubelet process running on worker-node-02 via port 10250.",
+    fact: "If there is a firewall blocking the Master Node from reaching Worker Node port 10250, <code>kubectl logs</code> and <code>kubectl exec</code> will hang and fail."
+  },
+  {
+    title: "Kubelet translates to CRI request",
+    who: "Actor: kubelet → container runtime",
+    node: "n-pod",
+    cmd: `# kubelet calls containerd via CRI (gRPC)
+RuntimeService.ContainerStatus(containerID)
+
+# Kubelet opens a stream to the runtime's socket`,
+    desc: "The Kubelet receives the proxy request. It doesn't read the files itself; instead, it delegates the task to the Container Runtime (like containerd or CRI-O) via the gRPC Container Runtime Interface.",
+    fact: "Historically, Docker handled this. Now, Kubernetes relies on the standard CRI, meaning it can fetch logs from any compliant runtime uniformly."
+  },
+  {
+    title: "Runtime reads the physical disk",
+    who: "Actor: container runtime → Filesystem",
+    node: "n-disk",
+    cmd: `# The runtime reads from the host Linux filesystem:
+/var/log/pods/default_my-app-abc12_uid/my-app/0.log
+
+# Standard output (stdout) and error (stderr) 
+# are captured here as JSON lines.`,
+    desc: "The container runtime accesses the actual physical text files stored on the worker node's hard drive. Everything the application printed to stdout/stderr is written to these local files.",
+    fact: "These files are <strong>ephemeral</strong>. When a pod is deleted, the kubelet wipes this directory to save disk space."
+  },
+  {
+    title: "Logs stream back to the developer",
+    who: "Actor: Full reverse chain",
+    node: "n-dev",
+    cmd: `Filesystem 
+  → containerd 
+    → kubelet 
+      → kube-apiserver 
+        → kubectl (Your Terminal)`,
+    desc: "The bytes are read from the disk and streamed all the way back up the chain. The connection stays open if you used '--follow'. This proxy architecture is why you can safely access logs without needing SSH access to the worker nodes.",
+    fact: "This chain can break if the payload is too large. Production environments <strong>always</strong> deploy a daemonset (like Promtail/Fluentbit) to continuously ship these physical files to a central database."
+  }
+];
+
+const NODE_IDS = [
+  "n-dev", "n-api", "n-etcd", "n-kubelet", "n-pod", "n-disk", "n-dev"
+];
+
+let cur = 0;
+const dark = matchMedia("(prefers-color-scheme:dark)").matches;
+
+// Color maps
+const FILL_LIGHT = {
+  "n-dev":"#f1efe8","n-api":"#dbeafe","n-etcd":"#eeedfe",
+  "n-kubelet":"#dcfce7","n-pod":"#dcfce7","n-disk":"#fbebeb"
+};
+const FILL_DARK = {
+  "n-dev":"#2c2c2a","n-api":"#0c2540","n-etcd":"#1c1840",
+  "n-kubelet":"#172804","n-pod":"#172804","n-disk":"#301010"
+};
+const STROKE_LIGHT = {
+  "n-api":"#3b82f6","n-etcd":"#7f77dd","n-kubelet":"#63a320",
+  "n-pod":"#63a320","n-disk":"#e05252","n-dev":"#888780"
+};
+const STROKE_DARK = {
+  "n-api":"#60a5fa","n-etcd":"#afa9ec","n-kubelet":"#97c459",
+  "n-pod":"#97c459","n-disk":"#f59b9b","n-dev":"#5f5e5a"
+};
+const TEXT_LIGHT = {
+  "n-api":"#0c447c","n-etcd":"#3c3489","n-kubelet":"#27500a",
+  "n-pod":"#27500a","n-disk":"#6b1515","n-dev":"#444441"
+};
+const TEXT_DARK = {
+  "n-api":"#85b7eb","n-etcd":"#afa9ec","n-kubelet":"#97c459",
+  "n-pod":"#c0dd97","n-disk":"#f59b9b","n-dev":"#b4b2a9"
+};
+
+function buildPills() {
+  const c = document.getElementById("pills");
+  STEPS.forEach((s, i) => {
+    const b = document.createElement("button");
+    b.className = "step-pill" + (i === 0 ? " active" : "");
+    b.textContent = i + 1;
+    b.title = s.title;
+    b.onclick = () => { cur = i; render(); };
+    c.appendChild(b);
+  });
+}
+
+function buildDots() {
+  const c = document.getElementById("dots");
+  STEPS.forEach((_, i) => {
+    const d = document.createElement("div");
+    d.className = "prog-dot";
+    d.onclick = () => { cur = i; render(); };
+    c.appendChild(d);
+  });
+}
+
+function resetNodes() {
+  ["n-dev","n-api","n-etcd","n-kubelet","n-pod","n-disk"].forEach(id => {
+    const g = document.getElementById(id);
+    if (!g) return;
+    const r = g.querySelector("rect");
+    if (!r) return;
+    r.style.fill   = dark ? "#2c2c2a" : "#f8f7f4";
+    r.style.stroke = dark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.10)";
+    r.style.strokeWidth = "0.5";
+    g.querySelectorAll("text").forEach(t => {
+      t.style.fill = dark ? "#b4b2a9" : "#5f5e5a";
+    });
+  });
+  
+  // Custom reset for path lines
+  ["a0","a1","a2_1","a2_2","a2_3","a3","a4"].forEach(id => {
+    const l = document.getElementById(id);
+    if(l) l.style.stroke = dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)";
+  });
+}
+
+function highlightPath(stepIdx) {
+  // Illuminate specific arrows based on the step
+  const activeColor = dark ? "#60a5fa" : "#3b82f6";
+  const lines = [];
+  
+  if(stepIdx === 1) lines.push("a0");
+  if(stepIdx === 2) lines.push("a1");
+  if(stepIdx === 3) lines.push("a2_1", "a2_2", "a2_3");
+  if(stepIdx === 4) lines.push("a3");
+  if(stepIdx === 5) lines.push("a4");
+  if(stepIdx === 6) lines.push("a0","a1","a2_1","a2_2","a2_3","a3","a4"); // All active on final step
+
+  lines.forEach(id => {
+    const l = document.getElementById(id);
+    if(l) l.style.stroke = activeColor;
+  });
+}
+
+function highlightNode(id) {
+  const g = document.getElementById(id);
+  if (!g) return;
+  const r = g.querySelector("rect");
+  if (!r) return;
+  r.style.fill        = dark ? (FILL_DARK[id]   || "#2c2c2a") : (FILL_LIGHT[id]  || "#f8f7f4");
+  r.style.stroke      = dark ? (STROKE_DARK[id] || "#60a5fa") : (STROKE_LIGHT[id]|| "#3b82f6");
+  r.style.strokeWidth = "1.5";
+  const tc = dark ? (TEXT_DARK[id] || "#e8e6de") : (TEXT_LIGHT[id] || "#1a1a18");
+  g.querySelectorAll("text").forEach(t => { t.style.fill = tc; });
+}
+
+function render() {
+  const s = STEPS[cur];
+  document.getElementById("s-title").textContent = s.title;
+  document.getElementById("s-who").textContent   = s.who;
+  document.getElementById("s-desc").textContent  = s.desc;
+  document.getElementById("s-cmd").textContent   = s.cmd;
+  document.getElementById("s-fact").innerHTML    = s.fact;
+  document.getElementById("step-num").textContent = cur + 1;
+  document.querySelectorAll(".step-pill").forEach((p, i) =>
+    p.classList.toggle("active", i === cur)
+  );
+  document.querySelectorAll(".prog-dot").forEach((d, i) => {
+    d.classList.toggle("done",   i < cur);
+    d.classList.toggle("active", i === cur);
+  });
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === STEPS.length - 1;
+  
+  resetNodes();
+  highlightNode(NODE_IDS[cur]);
+  highlightPath(cur);
+}
+
+function go(d) {
+  cur = Math.max(0, Math.min(STEPS.length - 1, cur + d));
+  render();
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight" || e.key === "ArrowDown") go(1);
+  if (e.key === "ArrowLeft"  || e.key === "ArrowUp")  go(-1);
+});
+
+buildPills();
+buildDots();
+render();
+</script>
+</body>
+</html>

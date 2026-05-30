@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kubernetes Traffic: User to Pod (Detailed) — Interactive Explainer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-page:       #f8f7f4;
+    --bg-primary:    #ffffff;
+    --bg-secondary:  #f1efe8;
+    --bg-tertiary:   #e8e6de;
+    --text-primary:  #1a1a18;
+    --text-secondary:#5f5e5a;
+    --text-tertiary: #888780;
+    --border-light:  rgba(0,0,0,0.10);
+    --border-mid:    rgba(0,0,0,0.18);
+    --accent-blue:   #185fa5;
+    --bg-blue:       #e6f1fb;
+    --text-blue:     #0c447c;
+    --border-blue:   #85b7eb;
+    --accent-green:  #3b6d11;
+    --bg-green:      #eaf3de;
+    --text-green:    #27500a;
+    --border-green:  #97c459;
+    --accent-purple: #534ab7;
+    --bg-purple:     #eeedfe;
+    --text-purple:   #3c3489;
+    --border-purple: #afa9ec;
+    --accent-amber:  #ba7517;
+    --bg-amber:      #faeeda;
+    --text-amber:    #633806;
+    --accent-cyan:   #0e7490;
+    --bg-cyan:       #cffafe;
+    --text-cyan:     #155e75;
+    --radius-md:     8px;
+    --radius-lg:     12px;
+    --font-sans:     -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    --font-mono:     'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg-page:       #1a1a18;
+      --bg-primary:    #242422;
+      --bg-secondary:  #2c2c2a;
+      --bg-tertiary:   #353533;
+      --text-primary:  #e8e6de;
+      --text-secondary:#b4b2a9;
+      --text-tertiary: #888780;
+      --border-light:  rgba(255,255,255,0.08);
+      --border-mid:    rgba(255,255,255,0.15);
+      --accent-blue:   #378add;
+      --bg-blue:       #0c2540;
+      --text-blue:     #85b7eb;
+      --border-blue:   #185fa5;
+      --accent-green:  #639922;
+      --bg-green:      #172804;
+      --text-green:    #97c459;
+      --border-green:  #3b6d11;
+      --accent-purple: #7f77dd;
+      --bg-purple:     #1c1840;
+      --text-purple:   #afa9ec;
+      --border-purple: #534ab7;
+      --accent-amber:  #ef9f27;
+      --bg-amber:      #241200;
+      --text-amber:    #fac775;
+      --accent-cyan:   #22d3ee;
+      --bg-cyan:       #083344;
+      --text-cyan:     #67e8f9;
+    }
+  }
+
+  /* ── Mobile First Typography & Layout ── */
+  html { font-size: 14px; }
+  body { font-family: var(--font-sans); background: var(--bg-page); color: var(--text-primary); min-height: 100vh; padding: 1rem 0.5rem; line-height: 1.6; }
+  .page { max-width: 960px; margin: 0 auto; }
+
+  /* ── Header ── */
+  .header { margin-bottom: 1.5rem; padding: 0 0.5rem; }
+  .header h1 { font-size: 20px; font-weight: 600; color: var(--text-primary); line-height: 1.3; }
+  .header p  { font-size: 14px; color: var(--text-secondary); margin-top: 4px; }
+  .badges    { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .badge { font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 20px; border-width: 0.5px; border-style: solid; }
+  
+  .b-cp  { background: var(--bg-blue);   color: var(--text-blue);   border-color: var(--border-blue); }
+  .b-ext { background: var(--bg-amber);  color: var(--text-amber);  border-color: var(--accent-amber); }
+  .b-net { background: var(--bg-cyan);   color: var(--text-cyan);   border-color: var(--accent-cyan); }
+  .b-wk  { background: var(--bg-green);  color: var(--text-green);  border-color: var(--border-green); }
+  .b-log { background: var(--bg-purple); color: var(--text-purple); border-color: var(--border-purple); }
+  .b-inline { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 20px; border-width: 0.5px; border-style: solid; vertical-align: middle; }
+
+  /* ── Step pills ── */
+  .step-nav { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.25rem; padding: 0 0.5rem; }
+  .step-pill { font-size: 13px; padding: 6px 14px; border-radius: 20px; border: 0.5px solid var(--border-mid); background: transparent; color: var(--text-secondary); cursor: pointer; transition: all .2s; font-family: var(--font-sans); touch-action: manipulation; }
+  .step-pill.active { background: var(--bg-blue); color: var(--text-blue); border-color: var(--border-blue); font-weight: 500; }
+  .step-pill:hover:not(.active) { background: var(--bg-secondary); }
+
+  /* ── Main Layout ── */
+  .main { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; }
+
+  /* ── Diagram card (Sticky) ── */
+  .diagram-card {
+    background: var(--bg-primary); border: 0.5px solid var(--border-light); border-radius: var(--radius-lg);
+    padding: 0.5rem; min-height: 280px; display: flex; align-items: center; justify-content: center;
+    position: sticky; top: 0.5rem; z-index: 50; box-shadow: 0 4px 15px rgba(0,0,0,0.06);
+  }
+  @media (prefers-color-scheme: dark) { .diagram-card { box-shadow: 0 4px 15px rgba(0,0,0,0.3); } }
+  .diagram-card svg { width: 100%; max-width: 400px; display: block; height: auto; }
+
+  /* ── Detail card ── */
+  .detail-card { background: var(--bg-primary); border: 0.5px solid var(--border-light); border-radius: var(--radius-lg); padding: 1rem; display: flex; flex-direction: column; gap: 1rem; }
+  .section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-tertiary); }
+  .step-title    { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-top: 2px; }
+  .step-who      { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+  .step-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.6; background: var(--bg-secondary); border-radius: var(--radius-md); padding: .85rem; }
+  .cmd-block { background: var(--bg-tertiary); border: 0.5px solid var(--border-light); border-radius: var(--radius-md); padding: .85rem; font-family: var(--font-mono); font-size: 12px; color: var(--accent-green); line-height: 1.6; white-space: pre-wrap; overflow-x: auto; }
+  .fact-box { background: var(--bg-secondary); border-left: 3px solid var(--accent-blue); border-radius: 0 var(--radius-md) var(--radius-md) 0; padding: .75rem; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+  .fact-box strong { color: var(--text-primary); font-weight: 500; }
+
+  /* ── Progress dots & nav ── */
+  .progress-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .prog-dot { width: 10px; height: 10px; border-radius: 50%; border: 0.5px solid var(--border-mid); background: transparent; cursor: pointer; transition: background .2s; touch-action: manipulation; }
+  .prog-dot.done   { background: var(--accent-green); border-color: var(--accent-green); }
+  .prog-dot.active { background: var(--accent-blue);  border-color: var(--accent-blue); }
+
+  .nav-btns { display: flex; gap: 10px; }
+  .nav-btn { flex: 1; padding: 10px 0; border-radius: var(--radius-md); border: 0.5px solid var(--border-mid); background: transparent; color: var(--text-primary); font-size: 14px; font-weight: 500; cursor: pointer; transition: background .15s; font-family: var(--font-sans); touch-action: manipulation; }
+  .nav-btn:hover:not(:disabled) { background: var(--bg-secondary); }
+  .nav-btn:disabled { opacity: .3; cursor: default; }
+
+  /* ── Reference table ── */
+  .ref-section { margin-top: 1rem; padding: 0 0.5rem; }
+  .ref-section h2 { font-size: 16px; font-weight: 600; color: var(--text-secondary); margin-bottom: .75rem; }
+  .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border: 0.5px solid var(--border-light); border-radius: var(--radius-md); }
+  .ref-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
+  .ref-table th { text-align: left; color: var(--text-secondary); font-weight: 600; padding: 10px; border-bottom: 0.5px solid var(--border-light); background: var(--bg-secondary); white-space: nowrap; }
+  .ref-table td { padding: 10px; border-bottom: 0.5px solid var(--border-light); color: var(--text-primary); line-height: 1.5; }
+  .ref-table tr:last-child td { border-bottom: none; }
+  .ref-table code { font-family: var(--font-mono); font-size: 11.5px; background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; color: var(--accent-green); white-space: nowrap; }
+
+  /* ── Interview box ── */
+  .interview-box { background: var(--bg-amber); border: 0.5px solid var(--border-purple); border-radius: var(--radius-lg); padding: 1rem; margin: 1.5rem 0.5rem 0; }
+  .interview-box h3 { font-size: 15px; font-weight: 600; color: var(--text-amber); margin-bottom: .5rem; }
+  .interview-box p  { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+  .interview-box strong { color: var(--text-primary); font-weight: 500; }
+
+  /* ── Desktop Breakpoint ── */
+  @media (min-width: 768px) {
+    html { font-size: 16px; }
+    body { padding: 2rem 1rem; }
+    .header { padding: 0; }
+    .header h1 { font-size: 24px; }
+    .step-nav { padding: 0; margin-bottom: 1.5rem; }
+    .main { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .diagram-card { padding: 1rem; min-height: 480px; top: 2rem; align-self: start; box-shadow: none; }
+    .detail-card { padding: 1.5rem; gap: 1.25rem; }
+    .nav-btn { padding: 8px 0; font-size: 13px; }
+    .ref-section { margin-top: .5rem; padding: 0; }
+    .table-responsive { border: none; overflow-x: visible; }
+    .ref-table { min-width: auto; }
+    .ref-table th, .ref-table td { padding: 8px 12px; }
+    .interview-box { margin: 1.5rem 0 0; padding: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <h1>Kubernetes traffic workflow</h1>
+    <p>How external users access a production application (Full Architecture)</p>
+    <div class="badges">
+      <span class="badge b-cp">Masternode (Control plane)</span>
+      <span class="badge b-ext">External / Cloud</span>
+      <span class="badge b-wk">Worker Node</span>
+      <span class="badge b-log">Logical Object</span>
+    </div>
+  </div>
+
+  <div class="step-nav" id="pills"></div>
+
+  <div class="main">
+
+    <div class="diagram-card">
+      <svg viewBox="0 0 320 500" role="img" id="diagram" aria-label="Detailed Kubernetes North-South traffic flow diagram">
+        <defs>
+          <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </marker>
+          <marker id="arr-rev" viewBox="0 0 10 10" refX="2" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M8 1L2 5L8 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </marker>
+        </defs>
+
+        <g id="n-user">
+          <rect x="110" y="5" width="100" height="30" rx="15" stroke-width="0.5"/>
+          <text x="160" y="20" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">User (Browser)</text>
+        </g>
+        <line x1="160" y1="35" x2="160" y2="55" stroke-width="1" marker-end="url(#arr)" fill="none" id="a0"/>
+        
+        <g id="n-elb">
+          <rect x="80" y="60" width="160" height="30" rx="8" stroke-width="0.5"/>
+          <text x="160" y="75" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="500">Cloud Load Balancer</text>
+        </g>
+
+        <rect x="2" y="105" width="316" height="390" rx="8" stroke="var(--border-mid)" stroke-width="1" stroke-dasharray="4" fill="none" />
+        
+        <rect x="10" y="115" width="300" height="130" rx="6" stroke="var(--border-blue)" stroke-width="0.5" stroke-dasharray="2" fill="none" />
+        <text x="15" y="125" font-size="9" font-weight="bold" fill="var(--text-tertiary)">MASTERNODE (CONTROL PLANE)</text>
+
+        <g id="n-api">
+          <rect x="80" y="140" width="160" height="30" rx="6" stroke-width="0.5"/>
+          <text x="160" y="155" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">kube-apiserver</text>
+        </g>
+        
+        <g id="n-etcd">
+          <rect x="20" y="195" width="120" height="35" rx="6" stroke-width="0.5"/>
+          <text x="80" y="207" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="500">etcd</text>
+          <text x="80" y="220" text-anchor="middle" dominant-baseline="central" font-size="9">Stores Rules & IPs</text>
+        </g>
+
+        <g id="n-ctrl">
+          <rect x="175" y="195" width="120" height="35" rx="6" stroke-width="0.5"/>
+          <text x="235" y="207" text-anchor="middle" dominant-baseline="central" font-size="11" font-weight="500">Endpoints Ctrl</text>
+          <text x="235" y="220" text-anchor="middle" dominant-baseline="central" font-size="9">Tracks Pod Health</text>
+        </g>
+
+        <line x1="80" y1="170" x2="80" y2="195" stroke-width="1" marker-end="url(#arr)" marker-start="url(#arr-rev)" fill="none" id="a-cp1"/>
+        <line x1="235" y1="195" x2="235" y2="170" stroke-width="1" marker-end="url(#arr)" fill="none" id="a-cp2"/>
+
+        <rect x="10" y="260" width="300" height="225" rx="6" stroke="var(--border-green)" stroke-width="0.5" stroke-dasharray="2" fill="none" />
+        <text x="15" y="270" font-size="9" font-weight="bold" fill="var(--text-tertiary)">WORKERNODE</text>
+
+        <g id="n-ingress">
+          <rect x="80" y="285" width="160" height="40" rx="8" stroke-width="0.5"/>
+          <text x="160" y="299" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">Ingress Controller</text>
+          <text x="160" y="315" text-anchor="middle" dominant-baseline="central" font-size="10">NGINX / ALB / Traefik</text>
+        </g>
+
+        <path d="M 40 75 L 10 75 L 10 305 L 80 305" fill="none" stroke-width="1.5" stroke-dasharray="3" marker-end="url(#arr)" id="a-traf1"/>
+        <text x="45" y="85" font-size="8" fill="var(--text-tertiary)">External Traffic (NodePort)</text>
+
+        <line x1="160" y1="170" x2="160" y2="285" stroke-width="1" stroke-dasharray="3" marker-end="url(#arr)" fill="none" id="a-watch"/>
+        <text x="165" y="250" font-size="9" fill="var(--text-tertiary)">Syncs rules/IPs</text>
+
+        <g id="n-svc">
+          <rect x="80" y="355" width="160" height="40" rx="8" stroke-width="0.5" stroke-dasharray="2"/>
+          <text x="160" y="369" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">Service + Endpoints</text>
+          <text x="160" y="385" text-anchor="middle" dominant-baseline="central" font-size="10">Logical grouping of Pod IPs</text>
+        </g>
+
+        <line x1="160" y1="325" x2="160" y2="355" stroke-width="1" marker-end="url(#arr)" fill="none" id="a-route"/>
+
+        <g id="n-pod">
+          <rect x="80" y="425" width="160" height="40" rx="8" stroke-width="0.5"/>
+          <text x="160" y="439" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500">Application Pod</text>
+          <text x="160" y="455" text-anchor="middle" dominant-baseline="central" font-size="10">HTTP 200 OK ✅</text>
+        </g>
+
+        <line x1="160" y1="395" x2="160" y2="425" stroke-width="1" marker-end="url(#arr)" fill="none" id="a-cni"/>
+        <text x="165" y="415" font-size="9" fill="var(--text-tertiary)">CNI Routing</text>
+
+      </svg>
+    </div>
+
+    <div class="detail-card">
+      <div>
+        <div class="section-label">Step <span id="step-num">1</span> of 7</div>
+        <div class="step-title" id="s-title">User accesses URL</div>
+        <div class="step-who"  id="s-who">Actor: Browser / DNS</div>
+      </div>
+      
+      <div>
+        <div class="progress-row" id="dots"></div>
+        <div class="nav-btns">
+          <button class="nav-btn" id="btn-prev" onclick="go(-1)">← Prev</button>
+          <button class="nav-btn" id="btn-next" onclick="go(1)">Next →</button>
+        </div>
+      </div>
+
+      <div class="step-desc" id="s-desc">Loading…</div>
+      <div class="cmd-block"  id="s-cmd"></div>
+      <div class="fact-box"   id="s-fact"></div>
+    </div>
+
+  </div><div class="ref-section">
+    <h2>Component reference</h2>
+    <div class="table-responsive">
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Component</th>
+            <th>Type</th>
+            <th>Role in request flow</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>kube-apiserver & etcd</td><td><span class="badge b-cp b-inline">Control Plane</span></td><td>The ultimate source of truth for routing rules (Ingress) and healthy IPs.</td></tr>
+          <tr><td>Endpoints Controller</td><td><span class="badge b-cp b-inline">Control Plane</span></td><td>Monitors Pod Readiness probes. If a pod crashes, it removes the IP from the Service.</td></tr>
+          <tr><td>Cloud ELB</td><td><span class="badge b-ext b-inline">External</span></td><td>Directs internet traffic into the cluster nodes via a NodePort.</td></tr>
+          <tr><td>Ingress Controller</td><td><span class="badge b-wk b-inline">Worker</span></td><td>An L7 reverse proxy (like NGINX). It syncs configuration from the API Server.</td></tr>
+          <tr><td>Service (Endpoints)</td><td><span class="badge b-log b-inline">Logical</span></td><td>A dynamic list of exact Pod IP addresses. Used by Ingress to skip kube-proxy.</td></tr>
+          <tr><td>CNI Plugin</td><td><span class="badge b-net b-inline">Network</span></td><td>The overlay (Calico/Cilium) that physically routes packets between worker nodes.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="interview-box">
+    <h3>⭐ Classic interview question</h3>
+    <p><em>"How does the Ingress Controller know a Pod crashed so it stops sending traffic to it?"</em><br><br>
+    <strong>Answer: Through an API Server Watch Loop.</strong><br><br>
+    When a Pod fails its Readiness Probe, the <strong>Endpoints Controller</strong> (on the Masternode) detects this and removes the Pod's IP from the Endpoints object in etcd. The <strong>Ingress Controller</strong> is constantly "watching" the API Server for these changes. The moment the API server updates, the Ingress Controller instantly updates its internal NGINX configuration in memory, dropping the bad IP.
+    </p>
+  </div>
+
+  <div class="footer">k8s-traffic interactive explainer · built for SRECloudOps.in</div>
+
+</div><script>
+const STEPS = [
+  {
+    title: "1. Developers declare desired routing",
+    who: "Actor: etcd & kube-apiserver",
+    node: "n-etcd",
+    cmd: `# Ingress Resource stored in etcd:
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: my-app-ingress
+spec:
+  rules:
+  - host: api.myapp.com
+    http:
+      paths:
+      - path: /
+        backend:
+          service:
+            name: users-api-svc`,
+    desc: "Before any traffic arrives, developers apply an Ingress YAML file. The kube-apiserver validates it and stores this configuration securely inside etcd. This is the desired routing state for the cluster.",
+    fact: "etcd is the <strong>only</strong> stateful component in the control plane. Everything else is stateless."
+  },
+  {
+    title: "2. Controller tracks healthy Pod IPs",
+    who: "Actor: Endpoints Controller (kube-controller-manager)",
+    node: "n-ctrl",
+    cmd: `# Endpoints Controller watch loop:
+If Pod(users-api-abc).Status == "Ready":
+   api.add_to_endpoints("users-api-svc", "10.244.2.8")
+
+If Pod(users-api-xyz).Status == "Failed":
+   api.remove_from_endpoints("users-api-svc", "10.244.1.5")`,
+    desc: "Simultaneously, the Endpoints Controller (or EndpointSlice Controller) running on the Masternode constantly watches the status of Pods. When a Pod passes its readiness probe, the controller writes its IP address into the Service's Endpoints list via the API Server.",
+    fact: "This controller ensures that broken or crashing pods never receive live user traffic."
+  },
+  {
+    title: "3. Ingress Controller syncs state",
+    who: "Actor: Ingress Controller (Watch Loop)",
+    node: "n-ingress",
+    cmd: `# NGINX Controller watches the API Server (gRPC stream):
+> RECEIVE: New Ingress rule for api.myapp.com
+> RECEIVE: New Endpoint IP 10.244.2.8 for users-api-svc
+
+# Dynamically updates NGINX memory (Lua/C bindings):
+upstream users-api-svc {
+    server 10.244.2.8:8080;
+}`,
+    desc: "The Ingress Controller (e.g., NGINX) doesn't query the API server on every user request—that would be too slow. Instead, it maintains a persistent 'watch' connection to the API server. Whenever rules or pod IPs change in etcd, the API server instantly pushes the update to the Ingress Controller, which reloads its configuration in memory.",
+    fact: "This real-time syncing is why Kubernetes is referred to as an <strong>event-driven</strong> architecture."
+  },
+  {
+    title: "4. User traffic hits the Cloud LB",
+    who: "Actor: External User & Cloud LB",
+    node: "n-elb",
+    cmd: `# User requests:
+GET https://api.myapp.com/ HTTP/1.1
+
+# Cloud Provider (AWS ALB / Cloudflare) forwards:
+Destination: <Worker-Node-Public-IP>:31234`,
+    desc: "Now that the internal rules are perfectly synced, a user makes a request. DNS resolves to your Cloud Provider's External Load Balancer. The LB typically terminates SSL and forwards the plain HTTP request to a specific NodePort on your worker nodes, where the Ingress Controller is listening.",
+    fact: "Traffic is now entering the physical boundary of your Kubernetes worker nodes."
+  },
+  {
+    title: "5. Ingress evaluates and routes",
+    who: "Actor: Ingress Controller",
+    node: "n-svc", // Highlighting the Service layer as a concept
+    cmd: `# Ingress inspects incoming request:
+Host: api.myapp.com -> Matches Rule!
+
+# Lookup destination:
+Target Service: users-api-svc
+Available Endpoints: [10.244.2.8]
+
+# Action: Reverse proxy to 10.244.2.8`,
+    desc: "The Ingress Controller receives the HTTP request. It looks at the Host header, checks its freshly synced memory, and matches the rule. It realizes it needs to send traffic to 'users-api-svc', selects the healthy IP '10.244.2.8', and proxies the request.",
+    fact: "Notice that Ingress routes directly to the Pod IP. It bypasses `kube-proxy` entirely for maximum performance."
+  },
+  {
+    title: "6. CNI delivers the packet",
+    who: "Actor: CNI Plugin (Calico/Cilium)",
+    node: "n-pod",
+    cmd: `# CNI handles the hop between physical servers:
+Source Node: Worker-01 (Where Ingress is)
+Dest Node: Worker-02 (Where Pod 10.244.2.8 is)
+
+# (Packet is encapsulated, transmitted, decapsulated)`,
+    desc: "Because the Ingress Controller might be on Node A, and the Target Pod on Node B, the cluster's CNI (Container Network Interface) takes over. It encapsulates the request, routes it across the physical network switch, and delivers it directly into the target Pod's network namespace.",
+    fact: "If you use an eBPF-based CNI like Cilium, this routing happens at the absolute lowest level of the Linux kernel for extreme speed."
+  },
+  {
+    title: "7. Application Responds",
+    who: "Actor: Your Code (Pod)",
+    node: "n-user",
+    cmd: `# Pod receives request, processes, and returns:
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"status": "success", "data": "Hello World"}`,
+    desc: "Finally, your code executes. It generates an HTTP 200 response, which flows back through the established TCP connection: Pod -> CNI -> Ingress Controller -> Cloud LB -> User Browser. The full request lifecycle is complete.",
+    fact: "If the application had crashed during processing, the Endpoints Controller (Step 2) would have already noticed and removed it, preventing the next user from failing."
+  }
+];
+
+const NODE_IDS = [
+  "n-etcd", "n-ctrl", "n-ingress", "n-elb", "n-svc", "n-pod", "n-user"
+];
+
+let cur = 0;
+const dark = matchMedia("(prefers-color-scheme:dark)").matches;
+
+// Color maps for nodes
+const FILL_LIGHT = {
+  "n-user":"#f1efe8","n-elb":"#faeeda","n-api":"#dbeafe",
+  "n-etcd":"#dbeafe","n-ctrl":"#dbeafe",
+  "n-ingress":"#dcfce7","n-svc":"#eeedfe","n-pod":"#dcfce7"
+};
+const FILL_DARK = {
+  "n-user":"#2c2c2a","n-elb":"#241200","n-api":"#0c2540",
+  "n-etcd":"#0c2540","n-ctrl":"#0c2540",
+  "n-ingress":"#172804","n-svc":"#1c1840","n-pod":"#172804"
+};
+const STROKE_LIGHT = {
+  "n-user":"#888780","n-elb":"#ba7517","n-api":"#3b82f6",
+  "n-etcd":"#3b82f6","n-ctrl":"#3b82f6",
+  "n-ingress":"#63a320","n-svc":"#7f77dd","n-pod":"#63a320"
+};
+const STROKE_DARK = {
+  "n-user":"#5f5e5a","n-elb":"#ef9f27","n-api":"#60a5fa",
+  "n-etcd":"#60a5fa","n-ctrl":"#60a5fa",
+  "n-ingress":"#97c459","n-svc":"#afa9ec","n-pod":"#97c459"
+};
+const TEXT_LIGHT = {
+  "n-user":"#444441","n-elb":"#633806","n-api":"#0c447c",
+  "n-etcd":"#0c447c","n-ctrl":"#0c447c",
+  "n-ingress":"#27500a","n-svc":"#3c3489","n-pod":"#27500a"
+};
+const TEXT_DARK = {
+  "n-user":"#b4b2a9","n-elb":"#fac775","n-api":"#85b7eb",
+  "n-etcd":"#85b7eb","n-ctrl":"#85b7eb",
+  "n-ingress":"#97c459","n-svc":"#afa9ec","n-pod":"#c0dd97"
+};
+
+function buildPills() {
+  const c = document.getElementById("pills");
+  STEPS.forEach((s, i) => {
+    const b = document.createElement("button");
+    b.className = "step-pill" + (i === 0 ? " active" : "");
+    b.textContent = i + 1;
+    b.title = s.title;
+    b.onclick = () => { cur = i; render(); };
+    c.appendChild(b);
+  });
+}
+
+function buildDots() {
+  const c = document.getElementById("dots");
+  STEPS.forEach((_, i) => {
+    const d = document.createElement("div");
+    d.className = "prog-dot";
+    d.onclick = () => { cur = i; render(); };
+    c.appendChild(d);
+  });
+}
+
+function resetNodes() {
+  ["n-user","n-elb","n-api","n-etcd","n-ctrl","n-ingress","n-svc","n-pod"].forEach(id => {
+    const g = document.getElementById(id);
+    if (!g) return;
+    const r = g.querySelector("rect");
+    if (!r) return;
+    r.style.fill   = dark ? "#2c2c2a" : "#f8f7f4";
+    r.style.stroke = dark ? "rgba(255,255,255,0.10)" : "rgba(0,0,0,0.10)";
+    r.style.strokeWidth = "0.5";
+    g.querySelectorAll("text").forEach(t => {
+      t.style.fill = dark ? "#b4b2a9" : "#5f5e5a";
+    });
+  });
+  
+  // Custom reset for path lines
+  ["a0","a-cp1","a-cp2","a-watch","a-traf1","a-route","a-cni"].forEach(id => {
+    const l = document.getElementById(id);
+    if(l) l.style.stroke = dark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)";
+  });
+}
+
+function highlightPath(stepIdx) {
+  const activeColor = dark ? "#60a5fa" : "#3b82f6";
+  const lines = [];
+  
+  if(stepIdx === 0) { lines.push("a-cp1"); document.getElementById("n-api").querySelector("rect").style.stroke = activeColor; }
+  if(stepIdx === 1) { lines.push("a-cp2"); document.getElementById("n-api").querySelector("rect").style.stroke = activeColor; }
+  if(stepIdx === 2) { lines.push("a-watch"); document.getElementById("n-api").querySelector("rect").style.stroke = activeColor; }
+  if(stepIdx === 3) lines.push("a0", "a-traf1");
+  if(stepIdx === 4) lines.push("a-route"); 
+  if(stepIdx === 5) lines.push("a-cni"); 
+  if(stepIdx === 6) lines.push("a0", "a-traf1", "a-route", "a-cni"); // Full established path
+
+  lines.forEach(id => {
+    const l = document.getElementById(id);
+    if(l) l.style.stroke = activeColor;
+  });
+}
+
+function highlightNode(id) {
+  const g = document.getElementById(id);
+  if (!g) return;
+  const r = g.querySelector("rect");
+  if (!r) return;
+  r.style.fill        = dark ? (FILL_DARK[id]   || "#2c2c2a") : (FILL_LIGHT[id]  || "#f8f7f4");
+  r.style.stroke      = dark ? (STROKE_DARK[id] || "#60a5fa") : (STROKE_LIGHT[id]|| "#3b82f6");
+  r.style.strokeWidth = "1.5";
+  const tc = dark ? (TEXT_DARK[id] || "#e8e6de") : (TEXT_LIGHT[id] || "#1a1a18");
+  g.querySelectorAll("text").forEach(t => { t.style.fill = tc; });
+}
+
+function render() {
+  const s = STEPS[cur];
+  document.getElementById("s-title").textContent = s.title;
+  document.getElementById("s-who").textContent   = s.who;
+  document.getElementById("s-desc").textContent  = s.desc;
+  document.getElementById("s-cmd").textContent   = s.cmd;
+  document.getElementById("s-fact").innerHTML    = s.fact;
+  document.getElementById("step-num").textContent = cur + 1;
+  document.querySelectorAll(".step-pill").forEach((p, i) =>
+    p.classList.toggle("active", i === cur)
+  );
+  document.querySelectorAll(".prog-dot").forEach((d, i) => {
+    d.classList.toggle("done",   i < cur);
+    d.classList.toggle("active", i === cur);
+  });
+  document.getElementById("btn-prev").disabled = cur === 0;
+  document.getElementById("btn-next").disabled = cur === STEPS.length - 1;
+  
+  resetNodes();
+  highlightNode(NODE_IDS[cur]);
+  highlightPath(cur);
+}
+
+function go(d) {
+  cur = Math.max(0, Math.min(STEPS.length - 1, cur + d));
+  render();
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "ArrowRight" || e.key === "ArrowDown") go(1);
+  if (e.key === "ArrowLeft"  || e.key === "ArrowUp")  go(-1);
+});
+
+buildPills();
+buildDots();
+render();
+</script>
+</body>
+</html>
